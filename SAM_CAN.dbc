@@ -1,0 +1,343 @@
+VERSION ""
+
+
+NS_ :
+NS_DESC_
+CM_
+BA_DEF_
+BA_
+VAL_
+CAT_DEF_
+CAT_
+FILTER
+BA_DEF_DEF_
+EV_DATA_
+ENVVAR_DATA_
+SGTYPE_
+SGTYPE_VAL_
+BA_DEF_SGTYPE_
+BA_SGTYPE_
+SIG_TYPE_REF_
+VAL_TABLE_
+SIG_GROUP_
+SIG_VALTYPE_
+SIGTYPE_VALTYPE_
+BO_TX_BU_
+BA_DEF_REL_
+BA_REL_
+BA_DEF_DEF_REL_
+BU_SG_REL_
+BU_EV_REL_
+BU_BO_REL_
+SG_MUL_VAL_
+
+BS_:
+
+BU_: Peltier_Control DashboardController SAM_Motor_controller SAM_Power_door_controller SAM_Charger SAM_ECU SAM_BMS
+VAL_TABLE_ Drive_mode 3 "Snow" 2 "Sport" 0 "ECO mode" ;
+VAL_TABLE_ Battery_status 32 "Error" 15 "not connected" 7 "Caution bad zero offset" 6 "U-Charge" 5 "Charge" 2 "Discharge" ;
+
+
+BO_ 3221225472 VECTOR__INDEPENDENT_SIG_MSG: 0 Vector__XXX
+SG_ constant_00 : 0|8@1- (1,0) [0|0] "" Vector__XXX
+SG_ Constant_value_5E : 0|8@1+ (1,0) [5|5] "Contant_Value" Vector__XXX
+SG_ Constant_value_08 : 0|8@1+ (1,0) [8|8] "Contant_Value" Vector__XXX
+
+BO_ 1010 Peltier_03: 8 Peltier_Control
+SG_ Maybe_charger_state : 8|8@1- (1,0) [0|0] "" Vector__XXX
+
+BO_ 754 Peltier_02: 8 Peltier_Control
+SG_ constant_02 : 48|8@1- (1,0) [0|0] "" Vector__XXX
+SG_ constant_68 : 40|8@1- (1,0) [0|0] "" Vector__XXX
+SG_ constant_a7 : 32|8@1- (1,0) [0|0] "" Vector__XXX
+SG_ always_10_or_11 : 0|8@1- (1,0) [0|0] "" Vector__XXX
+
+BO_ 498 Peltier_01: 8 Peltier_Control
+SG_ always_09_or_0a : 16|8@1- (1,0) [0|0] "" Vector__XXX
+SG_ constant_ff : 8|8@1- (1,0) [0|0] "" Vector__XXX
+SG_ constant_fc : 0|8@1- (1,0) [0|0] "" Vector__XXX
+
+BO_ 1760 PDC_06: 8 SAM_Power_door_controller
+SG_ constant_0f : 48|8@1- (1,0) [0|0] "" Vector__XXX
+
+BO_ 1248 PDC_04: 8 SAM_Power_door_controller
+SG_ PDC_04_Counter : 0|16@1- (1,0) [0|0] "" Vector__XXX
+
+BO_ 992 PDC_03: 8 SAM_Power_door_controller
+
+BO_ 480 PDC_01: 8 SAM_Power_door_controller
+
+BO_ 688 unused_always_0: 8 Vector__XXX
+
+BO_ 432 Dashboard_Controller_DRV_mode: 8 Vector__XXX
+SG_ selected_functions : 32|8@1- (1,0) [0|0] "" Vector__XXX
+SG_ bits : 24|8@1- (1,0) [0|0] "" Vector__XXX
+SG_ fan_Speed : 16|8@1- (1,0) [0|0] "" Vector__XXX
+SG_ last_driving_mode : 8|8@1- (1,0) [0|0] "" Vector__XXX
+SG_ selected_driving_mode : 0|8@1- (1,0) [0|0] "" Vector__XXX
+
+BO_ 560 Dashboard_Controller: 4 DashboardController
+SG_ Gear_R : 26|1@1- (1,0) [0|0] "" Vector__XXX
+SG_ Gear_N : 25|1@1- (1,0) [0|0] "" Vector__XXX
+SG_ Gear_D : 24|1@1- (1,0) [0|0] "" Vector__XXX
+SG_ buzzer_frequenzy : 16|8@1- (1,0) [0|0] "" Vector__XXX
+SG_ should_bits : 8|8@1- (1,0) [0|0] "" Vector__XXX
+SG_ gauges_illumination : 0|8@1- (1,0) [0|0] "" Vector__XXX
+
+BO_ 657 ECU_Pedals_ignition_12V: 8 Vector__XXX
+SG_ trip_km : 48|16@1- (0.1,0) [0|0] "km" Vector__XXX
+SG_ Voltage_12V : 40|8@1+ (1,0) [0|0] "" Vector__XXX
+SG_ Ignition_Key_Kick_K50 : 37|1@1- (1,0) [0|0] "" Vector__XXX
+SG_ Ignition_Key_2 : 38|1@1- (1,0) [0|0] "" Vector__XXX
+SG_ Ignition_Key_1_K15 : 39|1@1- (1,0) [0|0] "" Vector__XXX
+SG_ driving : 36|1@1- (1,0) [0|0] "" Vector__XXX
+SG_ DCDC_ON_Command : 34|1@1- (1,0) [0|0] "" Vector__XXX
+SG_ close_PC_command : 35|1@1- (1,0) [0|0] "" Vector__XXX
+SG_ Gear_R : 33|1@1- (1,0) [0|0] "" Vector__XXX
+SG_ Gear_D : 32|1@1- (1,0) [0|0] "" Vector__XXX
+SG_ break_pedal : 16|16@1+ (1,0) [0|0] "" Vector__XXX
+SG_ acceleration_Pedal : 0|16@1+ (1,0) [0|0] "" Vector__XXX
+
+BO_ 401 ECU_Skai_Control: 8 Vector__XXX
+SG_ requested_torque : 32|16@1- (0.005,0) [0|0] "Nm" Vector__XXX
+SG_ requested_speed : 48|16@1- (1,0) [0|0] "" Vector__XXX
+SG_ Counter_to_255 : 8|8@1- (1,0) [0|255] "" Vector__XXX
+SG_ Torque_or_Speed_Control : 1|1@1- (1,0) [0|0] "" Vector__XXX
+SG_ Skai_enable : 0|1@1- (1,0) [0|0] "" Vector__XXX
+
+BO_ 656 Skai_Motor_Torque_Voltage: 8 SAM_Motor_controller
+SG_ skai_torque : 0|16@1- (0.005,0) [0|0] "Nm" Vector__XXX
+SG_ skai_DC_Link_Voltage : 32|16@1- (0.1,0) [0|0] "Volt" Vector__XXX
+
+BO_ 400 Skai_Status_Errors: 8 SAM_Motor_controller
+SG_ Skai_enabled : 0|8@1+ (1,0) [0|0] "" Vector__XXX
+SG_ Skai_powerModuleError : 8|8@1+ (1,0) [0|0] "" Vector__XXX
+SG_ Skai_hardwareError : 16|8@1+ (1,0) [0|0] "" Vector__XXX
+SG_ Skai_driveError : 24|8@1+ (1,0) [0|0] "" Vector__XXX
+SG_ Skai_driveWarning : 32|8@1+ (1,0) [0|0] "" Vector__XXX
+
+BO_ 1797 BMS_Sync_500ms: 1 SAM_ECU
+SG_ Unknown_BMS_Sync_00_05 : 0|8@1- (1,0) [0|0] "" Vector__XXX
+
+BO_ 912 Skai_Motor_data: 8 SAM_Motor_controller
+SG_ Lifetime_counter : 16|16@1+ (1,0) [0|0] "ticks" Vector__XXX
+SG_ Motor_speed : 0|16@1- (1,0) [0|0] "rpm" Vector__XXX
+
+BO_ 1168 Skai_Motor_temperatures: 8 SAM_Motor_controller
+SG_ Temperatur_T3 : 32|16@1- (1,0) [0|0] " C" Vector__XXX
+SG_ Temperatur_T1 : 16|16@1- (1,0) [0|0] " C" Vector__XXX
+SG_ Wicklungstemperatur : 0|16@1- (1,0) [0|0] " C" Vector__XXX
+
+BO_ 1216 Charger_information_2: 8 SAM_Charger
+SG_ second : 48|8@1+ (1,0) [0|0] "second" Vector__XXX
+SG_ Minute : 40|8@1+ (1,0) [0|0] "minute" Vector__XXX
+SG_ Hour : 32|8@1+ (1,0) [0|0] "hour" Vector__XXX
+SG_ Weekday : 24|8@1+ (1,0) [0|0] "weekday" Vector__XXX
+SG_ Day : 16|8@1+ (1,0) [0|0] "day" Vector__XXX
+SG_ Month : 8|8@1+ (1,0) [0|0] "month" Vector__XXX
+SG_ year : 0|8@1+ (1,0) [0|0] "year" Vector__XXX
+
+BO_ 736 PDC_02: 8 SAM_Power_door_controller
+SG_ PDC_Status : 24|8@1- (1,0) [0|0] "" Vector__XXX
+
+BO_ 960 Charger_informations: 8 SAM_Charger
+SG_ Inside_temp : 32|16@1- (0.1,0) [0|0] " C" Vector__XXX
+SG_ Outside_temp : 16|16@1- (0.1,0) [0|0] " C" Vector__XXX
+SG_ Ustopcharge : 0|16@1- (1,0) [0|0] "Volt (unconfirmed scale)" Vector__XXX
+
+BO_ 704 Charger_status_2nd_PDO: 8 SAM_Charger
+SG_ DCDC_Warnings : 56|8@1- (1,0) [0|0] "" Vector__XXX
+SG_ DCDC_Temperature : 48|8@1- (1,0) [0|0] "" Vector__XXX
+SG_ DCDC_HV_Current : 32|16@1+ (0.0625,0) [0|0] "Ampere (unconfirmed scale)" Vector__XXX
+SG_ Charger_2nd_PDO_counter : 16|16@1- (1,0) [0|0] "" Vector__XXX
+SG_ DCDC_12V_Current : 0|16@1+ (0.0625,0) [0|0] "Ampere" Vector__XXX
+
+BO_ 576 Charger_request: 4 SAM_ECU
+SG_ MessageCounter_240 : 16|16@1+ (1,0) [0|0] "Number" Vector__XXX
+SG_ Charge_curent_reduction : 8|8@1+ (1,0) [0|0] "%" Vector__XXX
+SG_ xClear_charge_successful : 3|1@1+ (1,0) [0|0] "Bool" Vector__XXX
+SG_ xClear_error : 2|1@1+ (1,0) [0|0] "Bool" Vector__XXX
+SG_ x150Volt_On : 1|1@1+ (1,0) [0|0] "Bool" Vector__XXX
+SG_ xDCDC_on : 0|1@1+ (1,0) [0|0] "Bool" Vector__XXX
+
+BO_ 448 Charger_status_1st_PDO: 8 SAM_Charger
+SG_ VoltageHV : 48|16@1+ (0.0625,0) [0|0] "Volt" Vector__XXX
+SG_ VoltageLV : 32|16@1+ (0.00625,0) [0|0] "Volt" Vector__XXX
+SG_ Charger_heatsink_temperature : 24|8@1- (1,0) [0|0] " C" Vector__XXX
+SG_ Charger_temperature : 16|8@1- (1,0) [0|0] " C" Vector__XXX
+SG_ Charger_error : 8|8@1+ (1,0) [0|0] "Charger_Error" Vector__XXX
+SG_ xKeeping : 7|1@1+ (1,0) [0|0] "Bool" Vector__XXX
+SG_ xU_Charge : 6|1@1+ (1,0) [0|0] "Bool" Vector__XXX
+SG_ xCharging : 4|1@1+ (1,0) [0|0] "Bool" Vector__XXX
+SG_ xBulk_charge : 3|1@1+ (1,0) [0|0] "Bool" Vector__XXX
+SG_ xDCDC_on : 2|1@1+ (1,0) [0|0] "Bool" Vector__XXX
+SG_ x230Volt_on : 1|1@1+ (1,0) [0|0] "Bool" Vector__XXX
+SG_ xBattery_full : 0|1@1+ (1,0) [0|0] "Bool" Vector__XXX
+
+BO_ 658 ECU_Drive_mode_ECU_status: 8 SAM_ECU
+SG_ constant_06 : 32|8@1- (1,0) [0|0] "" Vector__XXX
+SG_ constant_61 : 24|8@1- (1,0) [0|0] "" Vector__XXX
+SG_ charger_error : 19|1@1- (1,0) [0|0] "" Vector__XXX
+SG_ break_error : 17|1@1- (1,0) [0|0] "" Vector__XXX
+SG_ accel_error : 16|1@1- (1,0) [0|0] "" Vector__XXX
+SG_ current_reduction : 10|1@1- (1,0) [0|0] "" Vector__XXX
+SG_ cooling_pump_2 : 9|1@1- (1,0) [0|0] "" Vector__XXX
+SG_ cooling_pump_1 : 8|1@1- (1,0) [0|0] "" Vector__XXX
+SG_ Drive_mode : 0|8@1+ (1,0) [0|0] "" Vector__XXX
+// FECU_error (bytes 5-7) intentionally has no SG_ here -- it is not a
+// plain little-endian 24-bit field in the real firmware (bytes 6/7 are
+// swapped relative to byte 5, see can_io.c case 0x292). decodeMessages.m
+// reconstructs it directly from the raw bytes; see the CM_ comment below.
+
+BO_ 0 ECU_Heartbeat_500ms: 1 SAM_ECU
+SG_ Heartbeat_00_05 : 0|8@1+ (1,0) [0|0] "" Vector__XXX
+
+BO_ 517 BMS: 4 SAM_ECU
+SG_ bms_reset : 19|1@1- (1,0) [0|0] "" Vector__XXX
+SG_ bms_close_cool : 18|1@1- (1,0) [0|0] "" Vector__XXX
+SG_ bms_close_PC : 17|1@1- (1,0) [0|0] "" Vector__XXX
+SG_ bms_close_chr : 16|1@1- (1,0) [0|0] "" Vector__XXX
+SG_ CAN_counter : 0|16@1+ (1,0) [0|0] "Number" Vector__XXX
+
+BO_ 133 BMS_Emergency: 7 SAM_ECU
+SG_ error_register : 16|8@1- (1,0) [0|255] "" Vector__XXX
+SG_ EMCY_ID : 0|16@1- (1,0) [0|65536] "" Vector__XXX
+
+BO_ 128 ECU_Sync: 0 SAM_ECU
+
+BO_ 1158 BMS_dynamic_regen_Current: 8 SAM_BMS
+SG_ SoC : 16|8@1+ (1,0) [0|0] "%" Vector__XXX
+SG_ dynamic_max_recuperation_current : 0|16@1- (0.0625,0) [0|0] "" Vector__XXX
+SG_ Slow_conter : 40|16@1+ (1,0) [0|0] "" Vector__XXX
+
+BO_ 902 BMS_Dynamic_Current_Limits: 8 SAM_BMS
+SG_ dynamic_max_discharge_Current : 0|16@1+ (0.0625,0) [0|40960] "" Vector__XXX
+SG_ dynamic_max_charge_current : 16|16@1+ (0.0625,0) [0|40960] "" Vector__XXX
+SG_ Battery_current : 48|16@1- (0.0625,0) [0|0] "Ampere" Vector__XXX
+SG_ Lowest_cell_voltage : 32|16@1+ (1,0) [0|0] "mV" Vector__XXX
+
+BO_ 646 BMS_Cell_temperature: 8 SAM_BMS
+SG_ dynamic_max_charge_current_pct : 56|8@1- (1,0) [0|0] "" Vector__XXX
+SG_ Heatsink_temperature : 48|8@1+ (1,0) [0|0] " C" Vector__XXX
+SG_ BMS_temperature : 40|8@1+ (1,0) [0|0] " C" Vector__XXX
+SG_ Average_temperature : 32|8@1+ (1,0) [0|0] " C" Vector__XXX
+SG_ Sensor_with_highest_temperature : 24|8@1+ (1,0) [0|0] "Sensor_Number" Vector__XXX
+SG_ Highest_temperature : 16|8@1+ (1,0) [0|0] " C" Vector__XXX
+SG_ Sensor_with_lowest_temperature : 8|8@1+ (1,0) [0|0] "Sensor_Number" Vector__XXX
+SG_ Lowest_temperature : 0|8@1+ (1,0) [0|0] " C" Vector__XXX
+
+BO_ 390 BMS_Battery_voltage_current_SoC: 8 SAM_BMS
+SG_ Battery_status : 56|8@1+ (1,0) [0|0] "Battery_Status" Vector__XXX
+SG_ remaining_capacity : 40|16@1+ (1,0) [0|0] "Wh?" Vector__XXX
+SG_ SoC : 32|8@1+ (1,0) [0|0] "%" Vector__XXX
+SG_ Battery_voltage : 16|16@1- (0.0625,0) [0|0] "Volt" Vector__XXX
+SG_ Battery_current : 0|16@1- (0.0625,0) [0|0] "Ampere" Vector__XXX
+
+BO_ 1286 BMS_Flags: 8 SAM_BMS
+SG_ eco_mode : 56|8@1- (1,0) [0|0] "" Vector__XXX
+SG_ error_precence : 48|8@1- (1,0) [0|0] "" Vector__XXX
+SG_ control : 16|16@1- (1,0) [0|0] "" Vector__XXX
+SG_ Parametrization : 15|1@1- (1,0) [0|0] "" Vector__XXX
+SG_ Balancing_active : 14|1@1- (1,0) [0|0] "" Vector__XXX
+SG_ Sleep : 13|1@1- (1,0) [0|0] "" Vector__XXX
+SG_ Lem_overcurrent : 12|1@1- (1,0) [0|0] "" Vector__XXX
+SG_ Can_speed : 11|1@1- (1,0) [0|0] "" Vector__XXX
+SG_ Can_supply : 10|1@1- (1,0) [0|0] "" Vector__XXX
+SG_ Supervision_negative_12V : 9|1@1- (1,0) [0|0] "" Vector__XXX
+SG_ Supervision_positive_12V : 8|1@1- (1,0) [0|0] "" Vector__XXX
+SG_ Leakage : 7|1@1- (1,0) [0|0] "" Vector__XXX
+SG_ Precharge_switch : 6|1@1- (1,0) [0|0] "" Vector__XXX
+SG_ Charge_switch : 5|1@1- (1,0) [0|0] "" Vector__XXX
+SG_ Closed_PC : 4|1@1- (1,0) [0|0] "" Vector__XXX
+SG_ Closed_cooling_flag : 3|1@1- (1,0) [0|0] "" Vector__XXX
+SG_ Power_control : 2|1@1- (1,0) [0|0] "" Vector__XXX
+SG_ second_protection_overdischarge : 1|1@1- (1,0) [0|0] "" Vector__XXX
+SG_ second_protection_overcharge : 0|1@1- (1,0) [0|0] "" Vector__XXX
+SG_ Count : 32|16@1+ (1,0) [0|0] "Number" Vector__XXX
+
+BO_ 1030 BMS_Cell_voltage_and_temperature: 5 SAM_BMS
+SG_ Cell_voltage : 24|16@1+ (1,0) [0|0] "mV" Vector__XXX
+SG_ Cell_number : 16|8@1+ (1,0) [0|0] "Cell_Number" Vector__XXX
+SG_ Cell_temperature : 8|8@1+ (1,0) [0|0] "Degree_C" Vector__XXX
+SG_ Temperature_sensor : 0|8@1+ (1,0) [0|0] "Sensor_Number" Vector__XXX
+
+BO_ 774 BMS_State_of_health: 8 SAM_BMS
+SG_ Remaining_energy : 48|16@1+ (1,0) [0|0] "Wh" Vector__XXX
+SG_ State_of_health : 40|8@1+ (1,0) [0|0] "%" Vector__XXX
+SG_ Average_internal_resistance : 32|8@1+ (0.1,0) [0|0] "Ohm" Vector__XXX
+SG_ Cell_with_highest_resistance : 24|8@1+ (1,0) [0|0] "Cell_Number" Vector__XXX
+SG_ Highest_internal_resistance : 16|8@1+ (0.1,0) [0|0] "Ohm" Vector__XXX
+SG_ Cell_with_lowest_resistance : 8|8@1+ (1,0) [0|0] "Cell_Number" Vector__XXX
+SG_ Lowest_internal_resistance : 0|8@1+ (0.1,0) [0|0] "Ohm" Vector__XXX
+
+BO_ 518 BMS_Max_and_min_cell_voltage: 8 SAM_BMS
+SG_ Average_cell_voltage : 48|16@1+ (1,0) [0|0] "mV" Vector__XXX
+SG_ Cell_with_highest_voltage : 40|8@1+ (1,0) [0|0] "Cell_Number" Vector__XXX
+SG_ Highest_cell_voltage : 24|16@1+ (1,0) [0|0] "mV" Vector__XXX
+SG_ Cell_with_lowest_voltage : 16|8@1+ (1,0) [0|0] "Cell_Number" Vector__XXX
+SG_ Lowest_cell_voltage : 0|16@1+ (1,0) [0|0] "mV" Vector__XXX
+
+
+
+CM_ BU_ SAM_Motor_controller "Motor controller";
+CM_ BU_ SAM_Power_door_controller "Tuersteuergeraet";
+CM_ BU_ SAM_Charger "on-borad-charger";
+CM_ BU_ SAM_ECU "Vehicle control unit";
+CM_ BU_ SAM_BMS "Battery Management System";
+CM_ BO_ 3221225472 "This is a message for not used signals, created by Vector CANdb++ DBC OLE DB Provider.";
+CM_ SG_ 560 buzzer_frequenzy "?";
+CM_ SG_ 560 should_bits "?";
+CM_ SG_ 401 Torque_or_Speed_Control "0 = Torque control
+1= Speed control";
+CM_ BO_ 400 "Signals replaced 2026-08-03 based on can_io.c firmware (case 0x190, SAM_Motor_controller RX handler): byte0=enabled, byte1=powerModuleError, byte2=hardwareError, byte3=driveError, byte4=driveWarning. Original DBC guess (constant_f4/constant_01/always_00_01_02) did not match the firmware and has been discarded.";
+CM_ BO_ 1797 "Cycle Time 500ms";
+CM_ SG_ 1797 Unknown_BMS_Sync_00_05 "00 or 05";
+CM_ BO_ 1216 " Reserved (TIME, Serial Number from Charger). Datum/Zeit. Zeit und Seriennummer von Eigenbau-Ladegeraet";
+CM_ BO_ 736 "Tuersteuergeraet";
+CM_ BO_ 960 "Reserved (Infos from Charger). Infos von Eigenbau-Ladegeraet";
+CM_ SG_ 704 DCDC_Warnings "warning:
+5s after start = 00 -->01
+values found: 0; 1; 4";
+CM_ BO_ 576 "Befehl an Ladegeraet";
+CM_ BO_ 448 "charger status recorded? nur beim Laden relevant. Ladegeraet Status";
+CM_ SG_ 448 Charger_heatsink_temperature "Waermetauscher-Temperatur";
+CM_ SG_ 448 Charger_temperature "Elektronik-Temperatur von charger ";
+CM_ BO_ 658 "ECU status, error reports";
+CM_ SG_ 658 Drive_mode "0 = ECO
+2 = Sport
+3 = Snow";
+CM_ SG_ 657 trip_km "Factor 1 -> 0.1 (2026-08-05, user-confirmed): raw value is stored/sent in 100m steps, so divide by 10 to get km.";
+CM_ SG_ 401 requested_torque "Factor 1 -> 0.005 Nm/count (2026-08-05, inferred, not firmware-confirmed -- can_io.c is the dashboard node and never builds/reads 0x191, see BO_401 comment below). Raw value clips at exactly +-10000 in every one of the 5 available driving traces regardless of route/driver, a classic torque-limiter clamp signature; the user confirmed the real vehicle's torque tops out at ~50Nm, so +-10000 counts = +-50Nm gives a clean 0.005 Nm/count. Shown alongside the raw count on its plot (right-hand axis) since this has no independent second measurement to cross-check against, unlike e.g. VoltageHV/skai_DC_Link_Voltage.";
+CM_ SG_ 656 skai_torque "Factor 1 -> 0.005 Nm/count (2026-08-05, inferred, not firmware-confirmed): same field layout/message pairing as requested_torque (this is the SKAI's reported actual torque vs. the ECU's commanded one), and raw values reach the same +-10000 clip in the traces where the command saturates -- applied the identical 0.005 Nm/count for consistency between commanded and actual. can_io.c (case 0x290) reads this raw int16 but applies no scale of its own.";
+CM_ SG_ 0 Heartbeat_00_05 "00/05";
+CM_ BO_ 517 "Cycle Time 100ms";
+CM_ SG_ 133 EMCY_ID "See CANopen EMCY service
+
+//not shure if it gets sent by ECU or BMS";
+CM_ BO_ 128 "Cycle Time 100ms";
+CM_ BO_ 646 "cell_temperature recorded? nicht relevant fuer Fahrdaten";
+CM_ BO_ 390 "battery_current, battery_voltage, SOC recorded?";
+CM_ BO_ 774 "internal resistance recorded? nicht relevant fuer Fahrdaten";
+CM_ SG_ 774 State_of_health "SoH ";
+CM_ BO_ 518 "cell_voltage recorded? nicht relevant fuer Fahrdaten";
+CM_ "Sign/scale corrections applied 2026-08-03 against can_io.c (SAM STM32 dashboard firmware, real RX decode) -- the original values below did not match how the firmware actually reads these bytes:
+BO_390 Battery_voltage, Battery_current: unsigned->signed (int16_t mainVoltage/mainCurrentSlow, case 0x186)
+BO_902 Battery_current: unsigned->signed (int16_t mainCurrentFast, case 0x386); dynamic_max_charge_current, dynamic_max_discharge_Current: signed->unsigned (uint16_t, case 0x386)
+BO_1168 Wicklungstemperatur, Temperatur_T1, Temperatur_T3: unsigned->signed (int16_t, case 0x490)
+BO_912 Motor_speed: unsigned->signed (int16_t skai.speed, case 0x390) -- this was the source of the bogus ~65535 rpm spikes
+BO_448 Charger_temperature, Charger_heatsink_temperature: unsigned->signed (int8_t, case 0x1c0); VoltageLV: factor 1->0.00625 V/count (confirmed via firmware threshold check ((float)voltage12V*0.00625)>13.2)
+BO_704 DCDC_HV_Current, DCDC_12V_Current: signed->unsigned (uint16_t current12V/currentMain, case 0x2c0)
+BO_960 Ustopcharge, Outside_temp, Inside_temp: unsigned->signed (int16_t, case 0x3c0, uStopCharge sub-message). ID 0x3c0/960 is multiplexed in firmware between 3 different sub-messages selected by flag bits in byte1 (RxData[1]&0xC0); decodeMessages.m now filters to keep only frames where byte1's top bit is set (the sub-message this DBC layout matches) and, per firmware (RxData[1] &= ~0xc0;), masks off byte1's top 2 bits before decoding Ustopcharge, since those bits are the mux flags, not part of the value. Inside_temp/Outside_temp: factor 1->0.1 -- at factor 1 these read >200-370 C (impossible); can_io.c stores them raw with no visible scale applied elsewhere in that file, but 0.1 C/count produces 28-38 C, physically plausible for August ambient/enclosure temps. This factor is INFERRED, not read directly from can_io.c -- flag if it looks off. Ustopcharge's scale remains unconfirmed (factor 1, i.e. raw counts) -- no matching constant was found in can_io.c.
+BO_657 Voltage_12V: signed->unsigned (plain uint8_t v12BusVoltage, case 0x291)
+BO_390 SoC, remaining_capacity: firmware comments mark these fields as NOT used on the real vehicle -- it sources SoC from BO_1158 (case 0x486) and remaining energy from BO_774 (case 0x306) instead. Left decodable here for reference but the app now reads the BO_1158/BO_774 versions.
+No firmware evidence was found for BO_401 ECU_Skai_Control (requested_torque/requested_speed/Skai_enable/Torque_or_Speed_Control) or BO_448 VoltageHV -- can_io.c is the dashboard/logger node and does not transmit or decode those. Left unchanged.
+BO_657 acceleration_Pedal, break_pedal: signed->unsigned, added 2026-08-04. can_io.c's case 0x291 only reads bytes 4-5 (ignitionKey/v12BusVoltage) and never touches bytes 0-3, so this fix is INFERRED FROM DATA, not firmware-confirmed. Evidence: across all 5 driving traces in 'Normale Fahrten', the raw uint16 for acceleration_Pedal ramps smoothly and continuously through the full 0-65535 range every time the pedal is pressed noticeably (28-45% of frames land >=32768 in every single trace) -- decoded as signed this produces a discontinuous jump from ~+32767 to ~-32768 every time the pedal crosses that raw count, i.e. exactly the 'square wave' glitch seen in the Pedals plot. break_pedal shares the identical 16-bit field layout in the same message and was fixed for consistency, even though no trace so far presses the brake pedal hard enough (raw stayed under ~25000 in all 5 traces) to actually exercise the wraparound.
+Scale factors added 2026-08-04, cross-validated against BMS_Battery_voltage_current_SoC.Battery_voltage across all 5 driving traces (can_io.c passes these fields through raw with no scale applied at case 0x290/0x1c0/0x2c0, so none of these are firmware-confirmed):
+BO_656 skai_DC_Link_Voltage: factor 1->0.1. Ratio (BMS pack voltage / raw DC-link count) measured 0.0997 +/- 0.002 over 36k samples across all 5 trips -- i.e. essentially exactly 1/10 (matches the DC link directly reading the same HV pack the BMS reports, as expected for a motor inverter's DC bus). Reported as 1280 (should read 128.0 V) before this fix.
+BO_448 VoltageHV: factor 1->0.0625. Ratio (BMS pack voltage / raw HV count) measured 0.06211 +/- 0.00001 (!) over the same 36k samples -- essentially exactly 1/16, i.e. the SAME per-count scale already used by BMS_Battery_voltage_current_SoC.Battery_voltage (0.0625 V/count) and exactly 10x the firmware-confirmed VoltageLV factor (0.00625). The ~0.6% gap between the raw empirical ratio and a clean 1/16 is well within the tolerance expected from two independent voltage sensors (charger ADC vs BMS shunt) plus resample timing.
+BO_704 DCDC_12V_Current: factor 1->0.0625 A/count, by analogy with the 0.0625-per-count family above. Cross-checked against the ALREADY firmware-confirmed VoltageLV (0.00625 V/count, reads ~13.8V): 13.8V * (raw_current*0.0625) gives DCDC output power with median ~160W and range ~95-215W across trips during normal driving, matching the vehicle's known typical DCDC load. DCDC_HV_Current: same 0.0625 A/count factor applied by symmetry (same message, same 16-bit field format) but genuinely UNCONFIRMED -- it reads exactly 0 in all 5 available driving traces (0 nonzero frames out of ~36k), so there is no data to validate any scale against; it is possibly not the DCDC's own HV-side draw at all but the AC mains charging current, which would only be nonzero during a charge session (no v2.0-format charging trace is available to check -- see 'Known limitations' in PROJECT_NOTES.md).
+BO_658 FECU_error, fixed 2026-08-04, FIRMWARE-CONFIRMED (can_io.c case 0x292: ecu.errorMsg = (*(uint16_t*)&RxData[6]) | (RxData[5]<<16), which on this little-endian target expands to RxData[6] | (RxData[7]<<8) | (RxData[5]<<16) -- byte5 is the MSB, byte6 the LSB, byte7 the middle byte). The DBC's old plain-intel 24-bit SG_ (byte5|byte6<<8|byte7<<16) decoded a completely different, wrong value: verified against all 5 driving traces, every single frame decoded as raw 0x00020 under the old (buggy) byte order versus the firmware-correct 0x200000 (no PDC on CAN, per SAM2_FECU_Errorhandling.pdf) -- exactly matching a user report of seeing error 20 in the app when the real error was 200000. Because this byte permutation isn't representable as one contiguous Intel/Motorola SG_, FECU_error has no SG_ line anymore -- it's reconstructed directly from raw bytes in decodeMessages.m (see comment there).";
+BA_DEF_ "BusType" STRING ;
+BA_DEF_DEF_ "BusType" "CAN";
+VAL_ 390 Battery_status 32 "Error" 15 "not connected" 7 "Caution bad zero offset" 6 "U-Charge" 5 "Charge" 2 "Discharge" ;
+VAL_ 658 Drive_mode 0 "ECO mode" 2 "Sport" 3 "Snow" ;
