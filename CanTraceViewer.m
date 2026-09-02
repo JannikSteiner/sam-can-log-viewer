@@ -19,6 +19,18 @@ app.Decoded = containers.Map('KeyType','char','ValueType','any');
 app.ViewRange = [0 1];  % [tLow tHigh] of the plotted/scrubbable window
 app.TabList = gobjects(1,numel(app.Groups));
 app.TabHandles = struct('Gauges',{},'Axes',{},'Cursors',{},'Lamps',{},'StatusLabels',{},'Sections',{},'PlotValueLabels',{},'BarCharts',{});
+app.IsPlaying = false;   % true while real-time playback is running
+app.PlayTimer = [];      % timer object driving playback ticks, created lazily
+app.PlayStartTic = [];   % tic() reference at the moment playback (re)started
+app.PlayStartTraceTime = 0;  % trace time (s) the current playback run started from
+
+% CAN TX (PEAK adapter) state -- see buildCanOutputTabContent
+app.CanChannel    = [];       % Vehicle Network Toolbox can.Channel once connected
+app.CanConnected  = false;
+app.CanArmed      = false;    % true = actually transmit on play-tick/step, not just connected
+app.CanDeviceRows = table(); % rows currently listed in the device dropdown
+app.LastTxTime    = 0;        % trace time already transmitted up to (avoids backlog bursts)
+app.CanFramesSent = 0;
 
 buildUI();
 
@@ -33,6 +45,7 @@ end
     % ------------------------------------------------------------------
     function buildUI()
         app.UIFigure = uifigure('Name','SAM CAN Trace Viewer','Position',[80 60 1500 900]);
+        app.UIFigure.CloseRequestFcn = @(src,~) onCloseRequest(src);
         app.MainGrid = uigridlayout(app.UIFigure, [3 1], 'RowHeight', {56,'1x',120});
 
         topGrid = uigridlayout(app.MainGrid, [1 2], 'ColumnWidth', {180,'1x'}, 'Padding',[8 8 8 8]);
@@ -52,15 +65,38 @@ end
             app.TabHandles(gi) = buildTabContent(tab, gcfg);
         end
 
+        % CAN output tab: not one of the data-driven app.Groups tabs (it
+        % doesn't show decoded signals), so it's built directly here and
+        % deliberately left out of app.TabList/app.TabHandles -- the
+        % onTabChanged/updateAtTime loops key off app.TabList, and a
+        % find() that doesn't match it is a harmless no-op.
+        canTab = uitab(app.TabGroup, 'Title', 'CAN Ausgabe (PEAK)');
+        buildCanOutputTabContent(canTab);
+        refreshCanDevices();
+
         bottomGrid = uigridlayout(app.MainGrid, [2 1], 'RowHeight', {50,50}, 'RowSpacing',4, 'Padding',[8 8 8 8]);
         bottomGrid.Layout.Row = 3;
 
-        cursorRow = uigridlayout(bottomGrid, [1 2], 'ColumnWidth', {'1x',220}, 'Padding',[0 0 0 0]);
+        cursorRow = uigridlayout(bottomGrid, [1 5], 'ColumnWidth', {36,36,36,'1x',150}, 'Padding',[0 0 0 0]);
         cursorRow.Layout.Row = 1;
+        app.StepBackButton = uibutton(cursorRow, 'push', 'Text', char(9198), 'FontSize',14, ...
+            'Enable','off', 'Tooltip','Previous CAN message', ...
+            'ButtonPushedFcn', @(~,~) stepFrame(-1));
+        app.StepBackButton.Layout.Column = 1;
+        app.PlayPauseButton = uibutton(cursorRow, 'push', 'Text', char(9654), 'FontSize',14, ...
+            'Enable','off', 'Tooltip','Play / Pause', ...
+            'ButtonPushedFcn', @(~,~) onPlayPause());
+        app.PlayPauseButton.Layout.Column = 2;
+        app.StepForwardButton = uibutton(cursorRow, 'push', 'Text', char(9197), 'FontSize',14, ...
+            'Enable','off', 'Tooltip','Next CAN message', ...
+            'ButtonPushedFcn', @(~,~) stepFrame(1));
+        app.StepForwardButton.Layout.Column = 3;
         app.TimelineSlider = uislider(cursorRow, 'Limits',[0 1], 'Value',0, 'Enable','off', ...
             'ValueChangingFcn', @(~,evt) onSlide(evt.Value), ...
             'ValueChangedFcn',  @(~,evt) onSlide(evt.Value));
+        app.TimelineSlider.Layout.Column = 4;
         app.TimeLabel = uilabel(cursorRow, 'Text','t = -- s', 'HorizontalAlignment','right', 'FontSize',13);
+        app.TimeLabel.Layout.Column = 5;
 
         % Windowed-view range slider: two independent sliders acting as
         % the low/high bound of the plotted/scrubbable time window. The
@@ -75,6 +111,226 @@ end
             'ValueChangingFcn', @(~,evt) onRangeSlide('high',evt.Value), ...
             'ValueChangedFcn',  @(~,evt) onRangeSlide('high',evt.Value));
         app.RangeLabel = uilabel(rangeRow, 'Text','0.00 - 0.00 s', 'HorizontalAlignment','right', 'FontSize',13);
+    end
+
+    % ------------------------------------------------------------------
+    % CAN output tab: replays the loaded trace's raw frames onto a real
+    % CAN bus through a PEAK-System USB adapter (Vehicle Network Toolbox),
+    % driven by the SAME Play/Pause/step-forward/step-back controls used
+    % for on-screen scrubbing -- so a diagnostic display wired to this
+    % adapter sees the exact same message stream, at the same real-time
+    % pace or single-stepped, without needing the vehicle.
+    function buildCanOutputTabContent(tab)
+        tg = uigridlayout(tab, [6 1], 'RowHeight', {40,40,40,32,40,'1x'}, ...
+            'RowSpacing',8, 'Padding',[12 12 12 12]);
+
+        deviceRow = uigridlayout(tg, [1 3], 'ColumnWidth', {'1x',120,120}, 'Padding',[0 0 0 0]);
+        deviceRow.Layout.Row = 1;
+        app.CanDeviceDropdown = uidropdown(deviceRow, 'Items',{'--'}, 'Enable','off');
+        app.CanDeviceDropdown.Layout.Column = 1;
+        refreshBtn = uibutton(deviceRow, 'push', 'Text','Aktualisieren', ...
+            'ButtonPushedFcn', @(~,~) refreshCanDevices());
+        refreshBtn.Layout.Column = 2;
+        app.CanConnectButton = uibutton(deviceRow, 'push', 'Text','Verbinden', ...
+            'Enable','off', 'ButtonPushedFcn', @(~,~) onCanConnectButton());
+        app.CanConnectButton.Layout.Column = 3;
+
+        bitrateRow = uigridlayout(tg, [1 2], 'ColumnWidth', {140,'1x'}, 'Padding',[0 0 0 0]);
+        bitrateRow.Layout.Row = 2;
+        uilabel(bitrateRow, 'Text','Bitrate (bit/s):', 'FontSize',13);
+        app.CanBitrateDropdown = uidropdown(bitrateRow, ...
+            'Items', {'125000','250000','500000','1000000'}, 'Value','125000');
+
+        armRow = uigridlayout(tg, [1 2], 'ColumnWidth', {320,'1x'}, 'Padding',[0 0 0 0]);
+        armRow.Layout.Row = 3;
+        app.CanArmCheckbox = uicheckbox(armRow, 'Text','Senden bei Play/Schritt aktivieren (armed)', ...
+            'Value', false, 'Enable','off', 'ValueChangedFcn', @(src,~) onCanArmChanged(src.Value));
+        app.CanStatusLabel = uilabel(armRow, 'Text','Nicht verbunden.', 'FontSize',13, 'WordWrap','on');
+
+        statsRow = uigridlayout(tg, [1 2], 'ColumnWidth', {200,'1x'}, 'Padding',[0 0 0 0]);
+        statsRow.Layout.Row = 4;
+        app.CanStatsLabel = uilabel(statsRow, 'Text','Gesendet: 0', 'FontSize',12);
+        app.CanLastFrameLabel = uilabel(statsRow, 'Text','Letzter Frame: --', 'FontSize',12);
+
+        uilabel(tg, 'Text', ['Hinweis: Bei aktivem "Senden"-Haken werden beim Abspielen/Schritt ' ...
+            'echte CAN-Frames auf den angeschlossenen Bus gesendet -- beim Anschluss an ein ' ...
+            'reales Fahrzeug entsprechend vorsichtig verwenden.'], ...
+            'FontColor',[0.75 0.4 0.0], 'FontAngle','italic', 'FontSize',11, 'WordWrap','on');
+
+        app.CanLogArea = uitextarea(tg, 'Value', {'Bereit.'}, 'Editable','off');
+    end
+
+    function refreshCanDevices()
+        try
+            allRows = canChannelList();
+        catch
+            allRows = table();
+        end
+        isPeak = ~isempty(allRows) && any(strcmp(cellstr(string(allRows.Vendor)), 'PEAK-System'));
+        if isPeak
+            rows = allRows(strcmp(cellstr(string(allRows.Vendor)), 'PEAK-System'), :);
+            fallbackNote = '';
+        elseif ~isempty(allRows)
+            rows = allRows;
+            fallbackNote = ' (kein PEAK-Gerät gefunden -- zeige verfügbare Testkanäle)';
+        else
+            rows = table();
+            fallbackNote = '';
+        end
+        app.CanDeviceRows = rows;
+
+        if isempty(rows) || height(rows) == 0
+            app.CanDeviceDropdown.Items = {'Kein Gerät gefunden'};
+            app.CanDeviceDropdown.ItemsData = 0;
+            app.CanDeviceDropdown.Enable = 'off';
+            app.CanConnectButton.Enable = 'off';
+        else
+            items = cell(height(rows),1);
+            for i = 1:height(rows)
+                items{i} = sprintf('%s -- %s Kanal %d', string(rows.Vendor(i)), string(rows.Device(i)), rows.Channel(i));
+            end
+            app.CanDeviceDropdown.Items = items;
+            app.CanDeviceDropdown.ItemsData = 1:height(rows);
+            app.CanDeviceDropdown.Value = 1;
+            app.CanDeviceDropdown.Enable = 'on';
+            app.CanConnectButton.Enable = 'on';
+        end
+
+        if ~app.CanConnected
+            if isempty(rows) || height(rows) == 0
+                app.CanStatusLabel.Text = ['Nicht verbunden. Kein Gerät gefunden -- PEAK-Adapter ' ...
+                    'anschließen bzw. PCAN-Basic-Treiber installieren und "Aktualisieren" drücken.'];
+            else
+                app.CanStatusLabel.Text = ['Nicht verbunden.' fallbackNote];
+            end
+        end
+    end
+
+    function onCanConnectButton()
+        if app.CanConnected
+            doCanDisconnect();
+        else
+            doCanConnect();
+        end
+    end
+
+    function doCanConnect()
+        if isempty(app.CanDeviceRows) || height(app.CanDeviceRows) == 0
+            return
+        end
+        idx = app.CanDeviceDropdown.Value;
+        row = app.CanDeviceRows(idx,:);
+        bitrate = str2double(app.CanBitrateDropdown.Value);
+        try
+            ch = canChannel(char(string(row.Vendor)), char(string(row.Device)));
+            configBusSpeed(ch, bitrate);
+            start(ch);
+            app.CanChannel = ch;
+            app.CanConnected = true;
+            app.CanFramesSent = 0;
+            app.CanStatsLabel.Text = 'Gesendet: 0';
+            app.CanLastFrameLabel.Text = 'Letzter Frame: --';
+            app.CanConnectButton.Text = 'Trennen';
+            app.CanDeviceDropdown.Enable = 'off';
+            app.CanBitrateDropdown.Enable = 'off';
+            app.CanArmCheckbox.Enable = 'on';
+            msg = sprintf('Verbunden: %s %s Kanal %d @ %d bit/s', string(row.Vendor), string(row.Device), row.Channel, bitrate);
+            app.CanStatusLabel.Text = msg;
+            appendCanLog(msg);
+        catch ME
+            app.CanStatusLabel.Text = ['Verbindungsfehler: ' ME.message];
+            appendCanLog(['FEHLER beim Verbinden: ' ME.message]);
+        end
+    end
+
+    function doCanDisconnect()
+        app.CanArmCheckbox.Value = false;
+        app.CanArmed = false;
+        try
+            if ~isempty(app.CanChannel) && isvalid(app.CanChannel)
+                stop(app.CanChannel);
+                delete(app.CanChannel);
+            end
+        catch
+        end
+        app.CanChannel = [];
+        app.CanConnected = false;
+        app.CanConnectButton.Text = 'Verbinden';
+        app.CanDeviceDropdown.Enable = 'on';
+        app.CanBitrateDropdown.Enable = 'on';
+        app.CanArmCheckbox.Enable = 'off';
+        app.CanStatusLabel.Text = 'Nicht verbunden.';
+        appendCanLog('Getrennt.');
+    end
+
+    function onCanArmChanged(val)
+        app.CanArmed = val;
+        if val
+            % Arm from the cursor's current position -- otherwise every
+            % frame between t=0 and "now" would burst-send the instant
+            % the checkbox is ticked mid-trace.
+            app.LastTxTime = app.TimelineSlider.Value;
+            appendCanLog('Senden aktiviert.');
+        else
+            appendCanLog('Senden deaktiviert.');
+        end
+    end
+
+    function appendCanLog(msg)
+        if ~isgraphics(app.CanLogArea)
+            return
+        end
+        line = sprintf('[%s] %s', datestr(now,'HH:MM:SS'), msg);
+        cur = app.CanLogArea.Value;
+        cur = [{line}; cur];
+        if numel(cur) > 50
+            cur = cur(1:50);
+        end
+        app.CanLogArea.Value = cur;
+    end
+
+    % Sends every trace frame with tFrom < Time <= tTo, in order -- called
+    % once per playback tick with the [previous tick, this tick] window.
+    function txFramesInRange(tFrom, tTo)
+        if ~app.CanConnected || ~app.CanArmed || isempty(app.Trace) || tTo <= tFrom
+            return
+        end
+        idx = find(app.Trace.Time > tFrom & app.Trace.Time <= tTo);
+        sendFrameIndices(idx);
+    end
+
+    % Sends exactly the trace frame(s) at the given row index/indices --
+    % used for single-message step and for the end-of-range playback tick.
+    function sendFrameIndices(idx)
+        if isempty(idx) || ~app.CanConnected || ~app.CanArmed
+            return
+        end
+        try
+            n = numel(idx);
+            for k = 1:n
+                ri = idx(k);
+                id = app.Trace.ID(ri);
+                dlc = app.Trace.DLC(ri);
+                m = canMessage(id, id > 2047, dlc);
+                if dlc > 0
+                    m.Data = app.Trace.Data(ri,1:dlc);
+                end
+                if k == 1
+                    msgs = m;
+                else
+                    msgs(k) = m; %#ok<AGROW>
+                end
+            end
+            transmit(app.CanChannel, msgs);
+            app.CanFramesSent = app.CanFramesSent + n;
+            lastRi = idx(end);
+            app.CanStatsLabel.Text = sprintf('Gesendet: %d', app.CanFramesSent);
+            app.CanLastFrameLabel.Text = sprintf('Letzter Frame: ID 0x%03X, %d Byte, t=%.3fs', ...
+                app.Trace.ID(lastRi), app.Trace.DLC(lastRi), app.Trace.Time(lastRi));
+        catch ME
+            app.CanStatusLabel.Text = ['Sendefehler: ' ME.message];
+            appendCanLog(['FEHLER beim Senden: ' ME.message]);
+        end
     end
 
     % ------------------------------------------------------------------
@@ -411,6 +667,9 @@ end
     end
 
     function loadFile(fname)
+        if app.IsPlaying
+            stopPlayback();
+        end
         dlg = uiprogressdlg(app.UIFigure, 'Title','Loading', ...
             'Message','Parsing trace file...', 'Indeterminate','on');
         cleanupObj = onCleanup(@() close(dlg)); %#ok<NASGU>
@@ -444,6 +703,16 @@ end
             app.TimelineSlider.Limits = app.ViewRange;
             app.TimelineSlider.Value = 0;
             app.TimelineSlider.Enable = 'on';
+            app.PlayPauseButton.Enable = 'on';
+            app.StepBackButton.Enable = 'on';
+            app.StepForwardButton.Enable = 'on';
+
+            % A new trace means a new frame sequence -- don't let an old
+            % file's cursor position leak into this one's TX bookkeeping.
+            app.LastTxTime = 0;
+            app.CanFramesSent = 0;
+            app.CanStatsLabel.Text = 'Gesendet: 0';
+            app.CanLastFrameLabel.Text = 'Letzter Frame: --';
 
             refreshPlots();
             updateAtTime(0);
@@ -534,7 +803,150 @@ end
         if isempty(app.Trace)
             return
         end
+        if app.IsPlaying
+            stopPlayback();
+        end
         updateAtTime(val);
+        % A manual seek never transmits, but still moves the "already
+        % sent up to" pointer -- otherwise the next Play would burst-send
+        % every frame skipped over by the drag.
+        app.LastTxTime = val;
+    end
+
+    % ------------------------------------------------------------------
+    % Playback: a timer ticks at a fixed wall-clock rate; each tick derives
+    % the trace time from actual elapsed wall time since play started
+    % (tic/toc), not from a fixed step-per-tick, so real-time speed holds
+    % regardless of UI/rendering jitter between ticks.
+    function ensurePlayTimer()
+        if isempty(app.PlayTimer) || ~isvalid(app.PlayTimer)
+            app.PlayTimer = timer('ExecutionMode','fixedSpacing', 'Period',0.05, ...
+                'TimerFcn', @(~,~) onPlayTick());
+        end
+    end
+
+    function startPlayback()
+        if isempty(app.Trace) || app.IsPlaying
+            return
+        end
+        ensurePlayTimer();
+        curT = app.TimelineSlider.Value;
+        hiLimit = app.TimelineSlider.Limits(2);
+        if curT >= hiLimit - 1e-9
+            curT = app.TimelineSlider.Limits(1);
+            app.TimelineSlider.Value = curT;
+            updateAtTime(curT);
+        end
+        app.PlayStartTraceTime = curT;
+        app.PlayStartTic = tic;
+        % Start transmitting from the current cursor position, not from
+        % wherever a stale LastTxTime happens to be (e.g. after a manual
+        % seek far away) -- avoids a burst-replay of skipped-over frames.
+        app.LastTxTime = curT;
+        app.IsPlaying = true;
+        app.PlayPauseButton.Text = char(9208);
+        start(app.PlayTimer);
+    end
+
+    function stopPlayback()
+        if ~isempty(app.PlayTimer) && isvalid(app.PlayTimer) && strcmp(app.PlayTimer.Running,'on')
+            stop(app.PlayTimer);
+        end
+        app.IsPlaying = false;
+        if isgraphics(app.PlayPauseButton)
+            app.PlayPauseButton.Text = char(9654);
+        end
+    end
+
+    function onPlayPause()
+        if isempty(app.Trace)
+            return
+        end
+        if app.IsPlaying
+            stopPlayback();
+        else
+            startPlayback();
+        end
+    end
+
+    function onPlayTick()
+        if isempty(app.Trace)
+            stopPlayback();
+            return
+        end
+        newT = app.PlayStartTraceTime + toc(app.PlayStartTic);
+        hiLimit = app.TimelineSlider.Limits(2);
+        if newT >= hiLimit
+            app.TimelineSlider.Value = hiLimit;
+            updateAtTime(hiLimit);
+            txFramesInRange(app.LastTxTime, hiLimit);
+            app.LastTxTime = hiLimit;
+            stopPlayback();
+            return
+        end
+        app.TimelineSlider.Value = newT;
+        updateAtTime(newT);
+        txFramesInRange(app.LastTxTime, newT);
+        app.LastTxTime = newT;
+    end
+
+    function onCloseRequest(src)
+        if ~isempty(app.PlayTimer) && isvalid(app.PlayTimer)
+            stop(app.PlayTimer);
+            delete(app.PlayTimer);
+        end
+        try
+            if ~isempty(app.CanChannel) && isvalid(app.CanChannel)
+                stop(app.CanChannel);
+                delete(app.CanChannel);
+            end
+        catch
+        end
+        delete(src);
+    end
+
+    % ------------------------------------------------------------------
+    % Step exactly one CAN message forward/backward, i.e. jump the cursor
+    % to the next/previous frame's own timestamp in app.Trace.Time, not a
+    % fixed time increment.
+    function stepFrame(dir)
+        if isempty(app.Trace)
+            return
+        end
+        if app.IsPlaying
+            stopPlayback();
+        end
+        times = app.Trace.Time;
+        cur = app.TimelineSlider.Value;
+        tol = max(abs(cur), 1) * 1e-9;
+        rowIdx = [];
+        if dir > 0
+            idx = find(times > cur + tol, 1, 'first');
+            if isempty(idx)
+                newT = app.TimelineSlider.Limits(2);
+            else
+                newT = times(idx);
+                rowIdx = idx;
+            end
+        else
+            idx = find(times < cur - tol, 1, 'last');
+            if isempty(idx)
+                newT = app.TimelineSlider.Limits(1);
+            else
+                newT = times(idx);
+                rowIdx = idx;
+            end
+        end
+        newT = min(max(newT, app.TimelineSlider.Limits(1)), app.TimelineSlider.Limits(2));
+        app.TimelineSlider.Value = newT;
+        updateAtTime(newT);
+        % Step = exactly one CAN message, forward or backward -- send the
+        % single frame landed on rather than a range (a "step back" isn't
+        % a real-time replay, it's "show me this one message again").
+        if ~isempty(rowIdx)
+            sendFrameIndices(rowIdx);
+        end
+        app.LastTxTime = newT;
     end
 
     function onRangeSlide(which, val)
@@ -562,6 +974,7 @@ end
         cVal = min(max(app.TimelineSlider.Value, lo), hi);
         app.TimelineSlider.Value = cVal;
         updateAtTime(cVal);
+        app.LastTxTime = cVal;
     end
 
     function onTabChanged(evt)

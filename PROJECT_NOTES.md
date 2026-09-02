@@ -112,6 +112,83 @@ mainly useful for headless testing (see "How this was tested" below).
   as the cursor slider's `Limits`; if the cursor was scrubbed outside the
   new window it gets clamped back in. This is the "select a time range,
   then scrub the cursor within it" behavior.
+- **Real-time playback + single-frame step.** Left of the cursor slider are
+  three buttons: step-back (⏮), play/pause (▶/⏸), and step-forward (⏭).
+  Play drives the cursor slider via a `timer` (`app.PlayTimer`,
+  `fixedSpacing`, 50 ms period); each tick sets the slider to
+  `app.PlayStartTraceTime + toc(app.PlayStartTic)` rather than incrementing
+  by a fixed step per tick, so playback tracks real wall-clock time
+  regardless of tick jitter or slow callback execution (verified headlessly
+  — after MATLAB's normal JIT/graphics warm-up, slider time tracks wall
+  time 1:1). Playback runs within the current windowed view
+  (`app.TimelineSlider.Limits`, i.e. `app.ViewRange`) and auto-stops
+  (button reverts to ▶) when it reaches the window's high end. Any manual
+  interaction with the cursor slider while playing (`onSlide`) auto-pauses
+  it first, so a user drag never fights the timer. The step buttons
+  (`stepFrame(±1)`) jump the cursor to the next/previous frame's *own*
+  timestamp in `app.Trace.Time` — not a fixed time increment — so "one
+  step" always means exactly one logged CAN message, clamped at the
+  current view's edges. The figure's `CloseRequestFcn` stops/deletes the
+  timer before closing so no orphaned timer object survives the app.
+- **CAN output tab (PEAK adapter replay).** A dedicated "CAN Ausgabe
+  (PEAK)" tab, built directly in `buildUI` rather than through
+  `buildSignalGroups`/`app.Groups` (it doesn't show decoded signals, so
+  it's deliberately left out of `app.TabList`/`app.TabHandles` — the
+  `onTabChanged`/`updateAtTime` loops key off `app.TabList`, and a lookup
+  that doesn't match it is a harmless no-op), lets the loaded trace's raw
+  frames be retransmitted onto a real CAN bus through a PEAK-System USB
+  adapter (Vehicle Network Toolbox: `canChannel('PEAK-System', device,
+  channel)`), so a diagnostic display wired to the adapter can be tested
+  without the vehicle. It reuses the *same* Play/Pause/step-forward/
+  step-back controls as on-screen scrubbing — there is no separate replay
+  transport. Device list (`canChannelList`, filtered to `Vendor ==
+  "PEAK-System"`) and bit rate (dropdown, default 125000 — SAM's bus is
+  125 kbit/s; no bitrate is recorded in `SAM_CAN.dbc`'s `BS_:` line
+  itself, this default is just the vehicle's known real setting) are
+  chosen, then "Verbinden" calls `configBusSpeed`/`start`. If no
+  PEAK-System device is detected (no adapter plugged in, or the
+  PCAN-Basic driver isn't installed), the dropdown falls back to whatever
+  `canChannelList` does return (in practice the MathWorks Virtual CAN
+  channels) with a status note, rather than leaving Connect dead —
+  this is also what the headless test suite connects to (`Virtual 1`
+  channel 1, sniffed from channel 2) since no physical adapter exists in
+  the dev/CI environment; the underlying `canChannel(vendor,device,
+  channel)` call is identical for any vendor Vehicle Network Toolbox
+  supports.
+  - **Armed, not just connected.** A separate "Senden bei Play/Schritt
+    aktivieren" checkbox gates actual transmission — connecting alone
+    never sends anything. This is a deliberate safety rail: plugging into
+    a real vehicle's bus and hitting Play by habit shouldn't blast frames
+    onto it.
+  - **`app.LastTxTime`** is the "already transmitted up to" watermark.
+    `onPlayTick` transmits every trace row with `Time` in
+    `(app.LastTxTime, newT]` each tick (`txFramesInRange`) — not one
+    frame per tick — so bursts of same-tick messages (several IDs due in
+    one 50 ms window) all go out, in original order, via a single
+    `transmit(app.CanChannel, msgArray)` call. Every cursor-moving action
+    updates `app.LastTxTime`, even when it doesn't itself transmit
+    (`onSlide`, `onRangeSlide`) — otherwise resuming Play after a manual
+    seek would burst-replay every frame skipped over. `startPlayback`
+    resets it to the resume point for the same reason. Arming the
+    checkbox mid-trace also resets it to the current cursor position, so
+    ticking "armed" doesn't instantly dump the whole trace-so-far.
+  - **Step = exactly one message, either direction.** `stepFrame` already
+    knows the exact trace row index it's moving the cursor to (needed for
+    the on-screen step feature itself); the CAN tab reuses that same row
+    index to transmit exactly that one frame via `sendFrameIndices`,
+    forward *or* backward — a "step back" on a real bus can't literally
+    un-send a frame, but resending the message you land on is what's
+    actually useful for exercising a diagnostic display frame-by-frame.
+  - **Verified without hardware.** No PEAK adapter is available in this
+    dev environment, so the transmit path was validated end-to-end
+    against MATLAB's Virtual CAN loopback (`canChannel('MathWorks',
+    'Virtual 1',1)` transmitting, a second channel on `2` receiving) —
+    single-step, play-burst ordering/IDs/data, disarm, and disconnect all
+    matched expected trace content exactly. Since `canChannel`/
+    `transmit`/`configBusSpeed` are called identically regardless of
+    vendor, this exercises the same code path a real PEAK-System device
+    would take — only the actual USB/PCAN-Basic driver layer is
+    untested. Worth a real-hardware smoke test before relying on it.
 - **Two supported trace formats, one "Load trace file" button.** Besides
   PCAN-View `.trc`, the SAMPlay logger's `.TXT` export is also accepted
   (rows like `01402.859488,      02b0,   8,   00,00,00,00,00,00,00,00,

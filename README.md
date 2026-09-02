@@ -2,6 +2,8 @@
 
 A MATLAB app for browsing and decoding PCAN-View `.trc` CAN bus traces from the SAM electric vehicle, decoded against a DBC file (`SAM_CAN.dbc`). Load a trace, scrub through it on a timeline, and watch gauges, plots, lamps, and status panels for Battery, Motor, Charger, Vehicle, and Errors update live.
 
+The timeline has real-time play/pause and single-message step forward/back controls. A separate "CAN Ausgabe (PEAK)" tab can replay the loaded trace's raw frames onto a real CAN bus through a PEAK-System USB adapter, using those same play/step controls — useful for testing a diagnostic display without the vehicle. This tab requires the MATLAB Vehicle Network Toolbox and the PEAK PCAN-Basic driver; it degrades gracefully (falls back to MATLAB's Virtual CAN channels) if no PEAK adapter is detected.
+
 ## Download
 
 A ready-to-run Windows installer is included: [`CanTraceViewer_Setup.exe`](CanTraceViewer_Setup.exe). It bundles the MATLAB Runtime, so no MATLAB installation is required to run the app.
