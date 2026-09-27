@@ -236,6 +236,320 @@ mainly useful for headless testing (see "How this was tested" below).
   may need a precondition (e.g. an HV/PC-close request actually being
   made) that these two clips never reached. Worth revisiting if a firmware
   source for the FECU fault state machine itself ever turns up.
+- **Efficiency map ("Effizienz-Kennfeld") tab.** Not scrub-driven either
+  (same reasoning as the CAN output tab), built directly in `buildUI` and
+  left out of `app.TabList`/`app.TabHandles`. X = `Skai_Motor_data.
+  Motor_speed` (rpm), Y = `Skai_Motor_Torque_Voltage.skai_torque` ("Ist
+  Moment", Nm), color = overall efficiency, `eta = P_mech / P_batt`:
+  - `P_mech = skai_torque [Nm] * (Motor_speed [rpm] * 2*pi/60)` -- shaft power.
+  - `P_batt = -(Battery_voltage [V] * Battery_current [A])` -- power OUT
+    of the battery. The minus sign comes from `can_io.c`'s energy-
+    consumption accumulator (`EnergySinceLastTick = currentCounter *
+    mainVoltage * -0.00000108507 / currentAdded`, ~line 1283), which
+    negates raw `current*voltage` (from the same raw field
+    `Battery_current` is decoded from) to get a *positive* "energy used"
+    number while driving -- i.e. raw `Battery_current` is negative while
+    discharging/driving, positive while charging. With that flip, `P_mech`
+    and `P_batt` land on the same sign together in both quadrants
+    (motoring: both positive; regen braking: both negative), so `eta`
+    comes out positive in both without special-casing direction.
+  - One point per **Ist-Moment sample** (`skai_torque`'s own timestamps)
+    -- Speed is zero-order-hold sampled there (`sampleSeriesAtTimes`),
+    battery V/I are linearly interpolated (`interpSeriesAtTimes`). Points
+    with `|P_batt| < 100 W` (after aux subtraction) are dropped -- not a
+    real efficiency reading, just a ratio blowing up near a division by ~0.
+  - **Corrections (2026-09-27, from an analysis of all PEAK + Durs
+    driving logs).** Each is a popup option, stored per dataset (`K`,
+    `KInfo`, `AuxInfo`, `CurrInfo`, shown in the dataset row + tooltip):
+    - **Current from 0x386, not 0x186.** 0x186 is sent at only **1 Hz by
+      both BMS variants**; zero-order-held against the 10 Hz torque it
+      gave ~6.1 pp median per-cell scatter (250 rpm x 2.5 Nm cells)
+      vs ~0.9 pp with 0x386 interpolated (Durs car: 2.5 -> 0.7 pp).
+      Cross-correlation lag of 0x386 vs P_mech: 0 ms (new BMS), 50 ms
+      (original BMS), so no lag compensation. 0x386's boot glitch
+      (-1300 A) is filtered with `|I| <= 1000 A`. 0x186 is only the
+      fallback when 0x386 is missing.
+    - **Torque gain k (`estimateTorqueGain`, "Spiegelpunkt").**
+      Uncorrected, the median motoring eta was 0.95 (own car, p90 ~1.0)
+      and **1.20** (Durs car) -- impossible, `skai_torque` is the
+      controller's *estimate* (tracks `requested_torque` within ~1.5 %).
+      At equal speed and |torque| the losses are about the same motoring
+      and braking, so per cell `P_batt = k*P_mech,reported + L` fits both
+      quadrants: slope = k, intercept = loss. Results: **own car k ≈ 0.946**
+      (0.93-0.955 per trip, same before/after Enc1100), **Durs car k ≈
+      0.71** (0.70-0.73) -- the two controllers are parametrised
+      differently. After correction eta_motor and eta_generator agree per
+      cell (e.g. 2000 rpm / 8-12 Nm: 0.90 / 0.89). Cell edges are relative
+      to the trace's 99th-percentile speed/|torque|, so it works for other
+      vehicles too. Needs >= 2 cells with >= 30 motoring AND >= 30 regen
+      points; traces without regen (e.g. `03082026_EZW-PES`, Durs
+      `LOG_C009`) fall back to the manual k, flagged in `KInfo`.
+    - **Aux base load (`estimateAuxPower`).** Standstill samples
+      (`|n| < 5 rpm`, `|M| < 0.3 Nm`) are pure aux load (30-210 W). If the
+      DCDC 12 V current explains them (r >= 0.5) it's modelled as
+      `a + b*I_12V` (Durs ~15 W/A, own car ~18.6 W/A with r = 0.98 *per
+      trip* -- pooled over trips there's no correlation because of
+      per-trip offsets), else the constant standstill median.
+    - Remaining known issue: at low torque (< 8 Nm) above ~4000 rpm the
+      own car still shows cells > 100 % after all corrections (~10 % of
+      motoring points) -- probably a torque offset in the estimate.
+    - Not implemented, but seen in the data: warm winding (> 45 °C)
+      shows 2-4 pp *higher* apparent eta than cold (< 35 °C) in the same
+      cell -- consistent with magnet flux dropping with temperature and
+      the torque estimate not compensating. A winding-temperature band
+      filter would be the next step.
+  - Computation only runs on "Aus aktueller Messung berechnen..." (button
+    press), never automatically on load/scrub -- it's an `interp1` pass
+    over the whole trace's torque-signal sample count (thousands of
+    points, cheap in practice, but explicitly opt-in per the user's
+    request rather than firing on every load).
+  - **Settings/confirmation popup (`showKennfeldSettingsDialog`).** The
+    button press doesn't compute anything itself -- it opens a small
+    modal `uifigure` (`WindowStyle` = `modal`, blocked on via
+    `uiwait`/`uiresume`, not `uiconfirm`, which can't host custom controls
+    like checkboxes/edit fields) showing the sample count and the steady-
+    state filter controls together, and nothing runs until "Berechnen" is
+    clicked there ("Abbrechen" or closing the window aborts). This
+    replaced two earlier, separate things: a permanently-visible steady-
+    state panel taking up tab space at all times, and a plain
+    `uiconfirm` gate with no way to change settings from it -- combining
+    them means reviewing what's about to be computed and choosing the
+    filter are the same step, and the tab body itself stays uncluttered
+    when the popup isn't open. The dialog remembers whatever was
+    confirmed last (`app.KennfeldSSEnabledDefault`/`WindowDefault`/
+    `MaxDSpeedDefault`/`MaxDTorqueDefault`) as its defaults next time it
+    opens, so repeated calculations with the same filter don't need
+    re-entering it.
+  - **Optional steady-state filter**, set in that popup: a checkbox
+    ("Nur Steady-State-Punkte auswerten") plus three fields (window in
+    seconds, max |Δ Drehzahl| in rpm, max |Δ Moment| in Nm) -- the fields
+    are disabled whenever the checkbox is off, so it's visually obvious
+    they're inert. When enabled, a point is kept only if Speed AND Torque
+    both stay within their max-delta band over a `+-window/2` time window
+    centered on that sample (`computeSteadyStateMask`, a two-pointer
+    sliding-window scan over the sorted `skai_torque` timestamps -- O(n)
+    despite the non-uniform CAN message spacing, since both window edges
+    only move forward as the center advances). **On by default since
+    2026-09-27** (1 s / 150 rpm / 2 Nm, keeps ~30-80 % of points): the
+    fastest 10 % of torque changes carried 3-8 pp extra apparent loss and
+    about twice the scatter. This is a *transient*
+    filter (drops points where the drivetrain is mid-acceleration/
+    braking), not the spatial/temporal *averaging* still tracked under
+    "Possible next steps" below -- the two are independent and can both
+    land eventually.
+  - **Combining multiple measurements.** Each computed dataset is stored
+    under a `Label` (the source trace's filename) in `app.KennfeldSets`,
+    with its own `Visible` flag; re-clicking "Berechnen" for an already-
+    loaded trace *replaces* that trace's dataset in place (keeping its
+    current show/hide state) rather than duplicating points. Loading a
+    different trace file and clicking "Berechnen" again *adds* a second
+    dataset. "Speichern..."/"Laden..." persist/restore `app.KennfeldSets`
+    to/from a `.mat` file (variable `kennfeldSets`) so a combined map can
+    be built up across separate app sessions -- loading merges into the
+    current in-memory list by the same replace-by-`Label` rule, rather
+    than overwriting it. Files saved before the `Visible` field existed
+    are handled on load (`~isfield(loaded,'Visible')` -> default all to
+    visible); files saved before the corrections get `K = 1` and a
+    "(alte Datei, ohne Korrekturen berechnet)" note.
+  - **Batch load ("Mehrere Messungen laden...", `onKennfeldMultiLoadButton`).**
+    Multi-select file picker -> the same settings popup, extended with a
+    scrollable checkbox list of the picked files (Alle/Keine buttons,
+    already-present datasets flagged "wird ersetzt") -> each ticked file is
+    parsed, decoded and turned into a dataset one at a time, *only* for the
+    Kennfeld: `app.Trace`/`app.Decoded` are never touched, so the scrub
+    tabs keep the previously loaded measurement. Cancelable progress
+    dialog; files that fail (missing signals, no frames, parse error) are
+    listed in one summary alert at the end. The math lives in the plain
+    helper `computeKennfeldSet` (shared with the single-trace button).
+  - **Dataset list scrolling:** `Scrollable` must be set on the inner
+    `uigridlayout`, not the `uipanel` -- a grid always fills its parent
+    panel, so the panel never scrolls and rows beyond its height were
+    simply cut off.
+  - **Per-dataset show/hide, no permanent selection step.** The dataset
+    list (`app.KennfeldDatasetPanel`, a scrollable `uipanel`,
+    `updateKennfeldDatasetPanel`) renders one row per dataset -- a
+    checkbox (`Label (N Punkte)`, toggles that dataset in/out of the plot
+    immediately via `onKennfeldVisibilityToggled`) plus its own
+    "Entfernen" button (deletes that dataset outright,
+    `onKennfeldRemoveDataset`) -- replacing an earlier design that used a
+    single multi-select listbox with one shared "Entfernen" button
+    (select-then-click). `refreshKennfeldPlot`/`onKennfeldScaleButton`
+    both only look at datasets with `Visible == true`; the plot title
+    reports "N Punkte, X von Y Messungen sichtbar" so it's clear when
+    something is hidden rather than absent.
+  - Color scale is fixed to `[0, 100]` % (`clim`) regardless of the actual
+    data range, so points outside a sane efficiency range (sensor timing
+    mismatch between the 3 source messages, non-driving states, etc.)
+    still plot -- just clipped to the colormap's end colors -- instead of
+    being silently dropped or blowing out the color scale for everything
+    else.
+  - **Readability at high point counts.** Marker size shrinks
+    automatically past 5k/20k points, and markers are drawn at 55% opacity
+    (`MarkerFaceAlpha`) so overlapping points in frequently-visited
+    operating regions read as denser/darker rather than one flat blob.
+    Dotted reference lines at `Drehzahl = 0` and `Moment = 0`
+    (`xline`/`yline`) separate the forward/reverse and motoring/regen
+    quadrants at a glance. "Achsen auf Daten skalieren" sets
+    `XLim = [0, max Drehzahl]` / `YLim = [0, max Moment]` over whatever's
+    currently *visible* -- a fixed `[0, max]` crop as requested, not an
+    auto-fit to the actual (possibly negative, e.g. regen/reverse) data
+    range.
+  - Ideas considered but not (yet) implemented: a data-cursor/tooltip
+    showing a point's exact N/T/eta on hover; letting extreme (best/worst
+    efficiency) points draw on top of the mass of average ones instead of
+    plain z-order-by-dataset. Neither seemed worth the extra UI complexity
+    yet -- revisit if the raw scatter still feels cluttered once real
+    multi-trip data has been tried.
+- **3D Kennfeldfläche popup (binned/averaged surface).** "3D-
+  Kennfeldfläche..." (next to "Achsen auf Daten skalieren") opens a
+  separate, non-modal `uifigure` (`showKennfeld3DPopup` /
+  `onKennfeld3DButton`) -- this is the "second step" flagged as future
+  work when the raw 2D scatter first shipped: nearby (Drehzahl, Moment)
+  points averaged together and rendered as a connected surface, rather
+  than the raw unaveraged points. Non-modal on purpose: it's a pure
+  viewer with nothing to hand back to the caller, so the user can keep
+  working in the main window, rotate/zoom it freely, and even open it
+  several times with different bin widths side by side.
+  - **Gridding (`binKennfeldPoints`).** Points from every currently
+    *visible* dataset (same set the 2D scatter uses) are combined, then
+    gridded onto a regular Drehzahl x Moment mesh with user-settable bin
+    width in each axis (defaulted to `range/30` per axis so there's
+    always a reasonable-looking mesh to start from) and averaged
+    (`accumarray` sum/count -> mean) per cell -- this is literally the
+    "nearby XY values merged as a mean" step. A cell is left `NaN` (a gap
+    in the surface -- `surf` simply skips `NaN` vertices) unless it has at
+    least "Min. Punkte / Zelle" raw samples, so a lone stray point can't
+    fabricate a plateau; default is 1 (every non-empty cell counts) but
+    raising it trades coverage for reliability.
+  - **Outlier exclusion specific to the averaged surface.** Unlike the 2D
+    scatter (where an extreme efficiency ratio -- see "sensor timing
+    mismatch" note above -- only clips that one point's *color*, never
+    touches the underlying number), an unfiltered outlier folded into a
+    cell's *mean* would fabricate a bogus spike/pit that doesn't reflect
+    the cell's real, typical value. So only points with
+    `0 <= eta <= 1` feed the grid/surface here; the popup's title reports
+    how many were excluded this way. The 2D scatter tab is untouched --
+    still shows everything, unfiltered.
+  - **Rendering: connected quads on a shared corner grid (2026-09-27).**
+    Each filled cell is one `patch` quad whose 4 corners come from
+    `kennfeldCornerHeights`: a corner's height = mean of all filled cells
+    touching it (up to 4, diagonal neighbours included), so adjacent
+    cells share corners and form one continuous surface
+    (`FaceColor = 'interp'`), while an isolated cell gets its own mean at
+    all 4 corners (flat tile). Replaces flat per-cell tiles at their mean
+    height (disconnected "staircase"). Diagonal-only neighbours touch at a
+    single shared corner point.
+  - **"Rohpunkte einblenden"** overlays the same (outlier-filtered) points
+    as a semi-transparent `scatter3` on top of the surface, for a visual
+    sanity check of how well the averaged surface actually represents the
+    raw data at a glance.
+  - **"Aktualisieren"** re-bins and redraws from the current field values
+    without closing/reopening the popup -- cheap (`accumarray` over a few
+    thousand points), so re-gridding at a different resolution is instant.
+  - **Guard against a too-coarse grid.** `surf()` needs at least a 2x2
+    cell grid to form any surface patch -- a bin width close to (or
+    larger than) the data's whole range collapses one or both grid
+    dimensions to a single bin, which `surf()` rejects outright ("Z must
+    be a matrix, not a scalar or vector") rather than drawing something
+    degenerate. Caught explicitly (`size(Zc,1) < 2 || size(Zc,2) < 2`)
+    and shown as the same kind of "nothing to draw yet, adjust the
+    settings" placeholder text used for the zero-filled-cells case,
+    instead of erroring out. **Found by headless testing** (an
+    aggressively widened bin from the test script), not by inspection --
+    worth remembering as a general lesson for any future `surf`/`mesh`
+    use in this app.
+- **Cell internal resistance ("Zell-Innenwiderstand") tab.** Whole-trace
+  analysis on button press (same non-scrub pattern as the Kennfeld tab,
+  built in `buildUI`, not in `app.TabList`). UI in
+  `buildCellResistanceTabContent`/`refreshCellResResults`, math in the
+  plain helper `computeCellResistance` (+ `robustSlopeThroughOrigin`,
+  `holdSample`). Output: sortable `uitable` (R, 95% CI, deviation from the
+  cell median, R², pair count, mean/min voltage, rating), a bar chart of
+  each cell's **deviation from the median in %** (absolute mOhm on a
+  0-based axis made all 36 bars look identical -- the cells only differ by
+  a few %), the ΔU/ΔI scatter of the selected cell (table row or bar
+  click), and the lag-scan curve. CSV export (`;`-separated).
+  Findings from the real traces that shaped the method (checked
+  2026-09-27 on the 17.09./18.09. trips):
+  - **0x406 cycles through 37 slots, not 36** -- slot 37 always reports
+    0 mV (filler) -- so a cell is refreshed every **3.7 s**, not 3.6 s.
+    `decodeMessages.m` already only splits out 1-36.
+  - **Current source: 0x386** (`BMS_Dynamic_Current_Limits.Battery_current`,
+    10 Hz). 0x186's `Battery_current` is only sent at 1 Hz; it is only
+    used as a fallback.
+  - **The cell voltages lag the current by ~1 s.** Cross-correlating ΔU
+    against ΔI over a lag range peaks at 0.95-1.0 s, identically for all
+    36 cells (so it is *not* "one snapshot trickled out over 3.7 s", which
+    would give a lag that depends on the cell's position in the cycle).
+    Using the newest current instead (lag 0) drops the correlation from
+    ~0.96 to ~0.74 and underestimates R by ~25%. A 1 s box-average of the
+    current fits slightly better than a pure delay on one trace but not on
+    the others, so a plain delay is used; auto-estimated per trace
+    (−0.5...3 s, 50 ms steps), overridable in the UI.
+  - **R is estimated from consecutive pairs of the same cell** (ΔU/ΔI,
+    ~3.7 s apart), fitted through the origin, not from U/I: the unknown
+    open-circuit voltage (and its SoC drift) cancels out in the
+    difference.
+  - **BMS startup garbage** must be filtered: first frames after BMS boot
+    carry 0 mV cells, one current frame of −1300 A, and one cycle where
+    cells 7-11 read ~740 mV and cell 12 ~1990 mV. Unfiltered, a single
+    such pair tripled cells 1-12's result on the morning trips (looked
+    like a cold-battery effect, wasn't). Filters: plausibility window
+    (1500-5000 mV, |I| ≤ 1000 A), isolated-spike rejection (> 500 mV from
+    both neighbours of the same cell), and MAD-based outlier rejection in
+    the fit.
+  - Typical result: **~0.67-0.70 mOhm per cell** (sum ~24-25 mOhm), R² ≈
+    0.95, per-cell 95% CI ≈ ±0.02 mOhm (±3%), cell spread (std) ~4%. At
+    this spread the per-cell ranking only partly reproduces between
+    trips/halves of a trip -- no cell currently stands out clearly; a
+    genuinely degraded cell (+15% and more, default threshold) would.
+  - It is an *effective* resistance over ~1-4 s (includes fast
+    polarisation), not the 1 kHz AC resistance of a cell datasheet, and
+    it is temperature-dependent. 0x406's cell temperatures read a flat
+    21-22 °C in the new-BMS traces, so no temperature correction is
+    applied (the range is shown in the summary instead).
+  - The new BMS's own reported resistances (0x306, `BMS_State_of_health`:
+    min/avg/max all 1.0 "Ohm" at factor 0.1, cell 1 as both best and
+    worst) look like placeholder values; shown for reference only. The
+    original BMS sends real values -- see "Two BMS variants" below.
+  - Charging traces (constant current) contain no usable ΔI -- the tab
+    says so instead of showing numbers.
+  - **Two BMS variants (user info, 2026-09-27).** All PEAK `.trc` logs
+    (`Normale Fahrten`) come from the user's own car with a **newly
+    developed BMS** (modelled on the original, not identical). The SAMPlay
+    logs in `SAMPlay_Logs/Durs` come from a car with the **original BMS**.
+    The findings above (placeholder 0x306, flat 22 °C, 37-slot cycle with
+    slot 37 = 0 mV, boot garbage) are from the *new* BMS. Differences seen
+    in the Durs logs (original BMS), all handled by the same code path:
+    - 0x406 filler slot is **cell 0** instead of 37 (same 3.7 s cycle);
+      `decodeMessages.m` only splits out 1-36, so both are ignored.
+    - 0x186/0x206/0x286/0x306 at 1 Hz (new BMS: 0x206/0x306 at 10 Hz);
+      0x386 still 10 Hz.
+    - Lag vs 0x386 again ~0.9-1.1 s (corr 0.92-0.94); 0x186 fits about as
+      well at ~0.1-0.3 s lag. Hence the "Strom" dropdown (Auto/0x386/0x186):
+      Auto runs a lag scan per source and takes 0x186 only if its peak
+      correlation beats 0x386 by > 0.02 -- in practice Auto picked 0x386
+      in every driving log of both cars, and 0x186 gave results within
+      ~±2%.
+    - **Real 0x306 values and real cell temperatures** (14-19 °C, 12
+      sensors) while driving; at standstill/charging 0x306 falls back to
+      0.8 / cell 1 placeholders. The summary now shows the BMS's min/avg/max
+      plus the *most frequent* best/worst cell (a median of cell indices is
+      meaningless), and the bar chart labels the BMS's worst cell.
+    - R ≈ 1.8-2.5 mOhm per cell (~3x the new-BMS car, varies per trip with
+      temperature/SoC), BMS's own average 0.9-1.4 (unit presumably mOhm,
+      different method -> lower absolute value).
+    - **Consistent outliers across all 5 driving logs:** cell 10 (+28% vs
+      median on average), 19 (+17%), 28 (+13%), 12 (+10%). Cells 10 and
+      19 are also the BMS's own most frequent "highest resistance cell" --
+      independent confirmation that the method finds real differences.
+    - Lower currents (typ. < 70 A, max ~150 A) -> ~50 pairs per cell per
+      trip, CI ±7% (vs ±3% on the new-BMS car).
+    - Spike filter threshold raised from 500 to 800 mV so a real load step
+      on this higher-resistance pack (~2.6 mOhm * 150 A = 390 mV) can't be
+      mistaken for a glitch (boot glitches are >= 1700 mV off).
+    - Temperature range shown as 5th-95th percentile: the new BMS's boot
+      cycle reports 0 °C on some sensors.
 - **Missing signals degrade gracefully.** If a signal isn't present in a
   given trace (e.g. charging-only messages during a driving trace), its
   gauge disables (`Enable='off'`), lamp goes gray, status label shows
@@ -431,6 +745,25 @@ checking gauge/lamp/status values against hand-decoded raw bytes. Real
 visual layout/polish has only been checked by the user running it
 interactively — flag anything cramped or misaligned.
 
+The efficiency map tab's calculation button opens a modal settings popup
+(`showKennfeldSettingsDialog`, blocked on via `uiwait`) before anything is
+computed. A plain `ButtonPushedFcn` on that popup's own "Berechnen" button
+can't be invoked directly from outside while `uiwait` is blocking the
+caller -- but a MATLAB `timer` **does** still fire during `uiwait` (it
+keeps the graphics/event queue alive), so the full path was verified
+headlessly anyway: a `fixedSpacing` timer polls for the popup figure
+(`findall(0,'Type','figure','Name','Kennfeld berechnen')`) and clicks its
+"Berechnen" button's `ButtonPushedFcn` once the dialog exists, while the
+main test script's call to `app.KennfeldCalcButton.ButtonPushedFcn(...)`
+is still blocked inside `uiwait` waiting for exactly that click. Confirmed
+this way: popup -> confirm -> calculation -> plot end-to-end (same point
+count as the direct-call version tested before the popup existed);
+per-dataset visibility checkbox (hide -> placeholder text, show -> scatter
+back); per-dataset "Entfernen". Separately, without the popup: the
+`computeSteadyStateMask` two-pointer algorithm against synthetic data with
+a known transient region, and the `.mat` save/load round trip. Real visual
+layout/polish still only checked by the user running it interactively.
+
 Useful validation snippet (checks every `buildSignalGroups.m` key actually
 exists in the DBC — run this after editing either file):
 
@@ -450,6 +783,15 @@ groups = buildSignalGroups();
 
 ## Possible next steps
 
+- Efficiency map: **spatial** binning/averaging landed (see "3D
+  Kennfeldfläche popup" above -- `binKennfeldPoints`, a separate
+  gridded-surface popup rather than changing the main 2D scatter tab,
+  which still shows the unaveraged raw cut by design). **Temporal**
+  averaging/resampling (e.g. onto a fixed-rate time grid before spatial
+  binning, so a long idle/steady period doesn't just contribute one point
+  per CAN message while a fast transient contributes many) is still not
+  implemented -- worth adding if particular regions still look
+  over/under-weighted by how often the vehicle happened to sit there.
 - Add `.trc` v1.1 support if the older log files matter — the only
   available charging-session traces (`Charging_did_not_Start.trc`, etc.)
   are v1.1, so `DCDC_HV_Current` (currently 0 in every drivable trace)
